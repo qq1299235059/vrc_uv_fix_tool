@@ -1,0 +1,74 @@
+name: Release VPM Package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-vpm
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check package version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="$(jq -er '.name' package.json)"
+          version="$(jq -er '.version' package.json)"
+          test "${name}" = 'com.niu11.uv-strain-baker'
+          [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          echo "name=${name}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          if git show-ref --tags --verify --quiet "refs/tags/v${version}"; then
+            echo "new=false" >> "${GITHUB_OUTPUT}"
+            echo "Version v${version} is already released. Bump package.json to publish again."
+          else
+            echo "new=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Stage VPM package
+        if: steps.version.outputs.new == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/package
+          cp -a package.json package.json.meta README.md README.md.meta Editor Editor.meta Tests Tests.meta dist/package/
+          cd dist/package
+          zip -qr "../${{ steps.version.outputs.name }}-${{ steps.version.outputs.version }}.zip" .
+
+      - name: Publish tag
+        if: steps.version.outputs.new == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag "v${{ steps.version.outputs.version }}" "${GITHUB_SHA}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Publish GitHub release
+        if: steps.version.outputs.new == 'true'
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: VRC UV Fix Tool ${{ steps.version.outputs.version }}
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/${{ steps.version.outputs.name }}-${{ steps.version.outputs.version }}.zip
+            dist/package/package.json
+            BlenderCompanion/uvx_exporter.py
+            BlenderCompanion/LICENSE-GPL-3.0-or-later.txt
+
