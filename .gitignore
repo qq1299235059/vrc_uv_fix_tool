@@ -1,0 +1,5 @@
+dist/
+*.uvx
+__pycache__/
+*.pyc
+
