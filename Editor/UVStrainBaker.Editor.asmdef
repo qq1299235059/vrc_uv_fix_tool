@@ -1,0 +1,9 @@
+{
+  "name": "UVStrainBaker.Editor",
+  "rootNamespace": "UVStrainBaker",
+  "references": [],
+  "includePlatforms": ["Editor"],
+  "allowUnsafeCode": false,
+  "autoReferenced": true
+}
+
